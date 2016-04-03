@@ -1,0 +1,12 @@
+[Pubnub]
+publish_key : pubnub-public-key
+subscribe_key : pubnub-subscribe-key
+
+[Email]
+email: email-for-notification-to-be-sent
+
+[Camera]
+resolution : 1280x720
+
+[Border]
+distance : proximity-limit-in-centimeters
