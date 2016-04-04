@@ -2,35 +2,12 @@
 
 import os
 import time
-import datetime
+from datetime import datetime
 import ConfigParser
-
-# Pubnub
 from pubnub import Pubnub 
-
-# GPIO
 import RPi.GPIO as GPIO
+from cloudant.account import Cloudant
 
-# modules for sending email
-import smtplib
-from email.mime.image import MIMEImage
-from email.mime.multipart import MIMEMultipart
-
-# GPIO setup
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
-
-# GPIO for the sensor
-TRIG = 23
-ECHO = 12
-GPIO.setup(TRIG,GPIO.OUT)
-GPIO.setup(ECHO,GPIO.IN)
-
-# GPIO for the LEDs
-GREEN_LED = 13  # indicates if the system is running
-RED_LED = 26    # indicates the alert
-GPIO.setup(GREEN_LED, GPIO.OUT)
-GPIO.setup(RED_LED, GPIO.OUT)
 
 config = ConfigParser.ConfigParser()
 config.read('config.ini')
@@ -41,54 +18,71 @@ subscribe_key     = config.get('Pubnub', 'subscribe_key')
 email             = config.get('Email', 'email')
 camera_resolution = config.get('Camera', 'resolution')
 border_distance   = int(config.get('Border', 'distance'))
+db_name           = config.get('Cloudant', 'db_name')
+db_username       = config.get('Cloudant', 'username')
+db_api_key        = config.get('Cloudant', 'api_key')
+db_api_pass       = config.get('Cloudant', 'api_pass')
+
+# connect to cloudant
+cloudant = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
+cloudant.connect()
 
 # Pubnub api setup
 pubnub = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
 channel = 'Rangefinder'
 
+# GPIO setup
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
 
-def say_cheese(filename):
-    command = "fswebcam -r %s %s" % (camera_resolution, filename)
+TRIG = 23                   # for sensors
+ECHO = 12                   # 
+GPIO.setup(TRIG,GPIO.OUT)   #
+GPIO.setup(ECHO,GPIO.IN)    #
+
+GREEN_LED = 13                  # for the LEDs
+RED_LED = 26                    # green : indicates if the system is running
+GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates the alert
+GPIO.setup(RED_LED, GPIO.OUT)   #
+
+
+
+def upload(timestamp, filename, manual=False):
+
+    print 'Uploading to db...'
+    
+    db = cloudant[db_name]
+    data = {
+        'timestamp': timestamp,
+        'filename' : filename,
+        'manual'   : manual
+    }
+    new_document = db.create_document(data)
+    fp = open('img/'+filename, 'rb')
+    data = fp.read()
+    fp.close()
+    new_document.put_attachment(filename, 'image/jpeg', data)
+    
+    if new_document.exists():
+        print 'Upload success!'
+
+
+def say_cheese(timestamp):
+    filename = timestamp+'.jpg'
+    command = "fswebcam -r %s %s" % (camera_resolution, 'img/'+filename)
     os.system(command)
     return filename
 
-def send_email(filename):
-    print 'sending email...'
-    msg = MIMEMultipart()
-    msg['Subject'] = 'ALERT from the Pi'
-    msg['From'] = email
-    msg['To'] = email
-    msg.preamble = 'There has been an intruder!'
-
-    fp = open(filename, 'rb')
-    img = MIMEImage(fp.read())
-    fp.close()
-    msg.attach(img)
-    server = smtplib.SMTP('localhost', 1025)
-    server.sendmail(email, email, msg.as_string())
-    server.quit()
-
-def publish_to_pubnub():
-    # Publish the measured distance to PubNub
-    '''
-    message = {
-        'distance': distance,
-        'time': '....'
-    }
-    '''
-    #print pubnub.publish(channel, message)
-
-    return True
 
 def alert_owner(timestamp):
 
-    print "!!!!! Intruder Alert !!!!!"
+    print '!!!!! Intruder Alert !!!!!'
 
     format = '%Y-%m-%dT%H-%M-%S'
-    timestamp_formatted = datetime.datetime.fromtimestamp(timestamp).strftime(format)
-    filename = say_cheese(timestamp_formatted+'.jpg')
-    #send_email(filename)
-    #publish to pubnub
+    timestamp_formatted = datetime.fromtimestamp(timestamp).strftime(format)
+    filename = say_cheese(timestamp_formatted)
+    upload(timestamp_formatted, filename)
+    # POST call to https://k-suh.com/api/pi-surveillance
 
 
 
@@ -96,10 +90,11 @@ if __name__ == '__main__':
 
     # indicate that the system is running
     GPIO.output(GREEN_LED, True)
+    GPIO.output(RED_LED, False)
 
     # Boot the trigger
-    GPIO.output(TRIG,False)
-    print("Waiting for sensor to settle.")
+    GPIO.output(TRIG, False)
+    print 'Booting  the sensor...'
     time.sleep(3)
 
 
@@ -133,8 +128,8 @@ if __name__ == '__main__':
 
             # Round out distance(in centimeters) for simplicity and print.
             distance = round(distance, 0)
-            
-            print("Distance:", distance, "cm")
+
+            print 'Distance: %s cm' % (distance)
 
             # test if proximity breached the border
             if (distance < border_distance):
