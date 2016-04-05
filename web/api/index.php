@@ -56,8 +56,7 @@ switch($option) {
         $mail->Subject = '!!! INTRUDER ALERT !!!';
         $mail->addStringAttachment($image_data, $filename, 'base64', 'image/jpeg');
         $body = <<<EOT
-<h4>There has been an intruder at {$timestamp} (UTC).</h4>
-<br/>
+<h4>There has been an intruder at {$timestamp} (UTC).</h4><br/>
 <h4>Goto <a href="{$url_webpage}" target="_blank">Control Room</a></h4>
 EOT;
         $mail->msgHTML($body);
