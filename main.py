@@ -22,13 +22,11 @@ db_api_pass  = config.get('Cloudant', 'api_pass')
 cloudant     = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
 cloudant.connect()
 
-# Pubnub api setup
-#pubnub = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
-#channel = 'Rangefinder'
-#
-# pubub stuff...
-# publish_key       = config.get('Pubnub', 'publish_key')
-# subscribe_key     = config.get('Pubnub', 'subscribe_key')
+# Pubnub setup
+publish_key   = config.get('Pubnub', 'publish_key')
+subscribe_key = config.get('Pubnub', 'subscribe_key')
+pubnub        = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
+channel       = 'pi-surveillance'
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -44,6 +42,33 @@ RED_LED = 26                    # green : indicates if the system is running
 GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates the alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
 
+
+def callback(message, channel):
+    print(message)
+    if (message == 'off'):
+        pubnub.unsubscribe(channel=channel)
+  
+  
+def error(message):
+    print("ERROR : " + str(message))
+  
+  
+def connect(message):
+    print("CONNECTED")
+    print pubnub.publish(channel=channel, message='Hello from the PubNub Python SDK')
+  
+  
+  
+def reconnect(message):
+    print("RECONNECTED")
+  
+  
+def disconnect(message):
+    print("DISCONNECTED")
+  
+  
+pubnub.subscribe(channels=channel, callback=callback, error=callback,
+                 connect=connect, reconnect=reconnect, disconnect=disconnect)
 
 def upload(timestamp, filename, manual=False):
 
@@ -67,8 +92,10 @@ def upload(timestamp, filename, manual=False):
 
 def send_email(timestamp, filename, docid):
     print 'Sending email...'
+
     url_img = 'https://%s:%s@%s.cloudant.com/%s/%s/%s' % \
               (db_api_key, db_api_pass, db_username, db_name, docid, filename)
+
     payload = {
         'option'     : 'email',
         'timestamp'  : timestamp,
@@ -96,9 +123,12 @@ def alert_owner(timestamp):
     format = '%Y-%m-%dT%H-%M-%S'
     # format the timestamp so its readable
     timestamp = datetime.fromtimestamp(timestamp).strftime(format)
-    filename = say_cheese(timestamp)
-    docid = upload(timestamp, filename)
-    send_email(timestamp, filename, docid)
+    # filename = say_cheese(timestamp)
+    # docid = upload(timestamp, filename)
+    # send_email(timestamp, filename, docid)
+    print 'pubnub....'
+    #message = {'time': timestamp}
+    #pubnub.publish(channel, message)
 
 
 if __name__ == '__main__':
@@ -162,4 +192,5 @@ if __name__ == '__main__':
 
     finally:
         print 'Shutting down system...'
+        pubnub.unsubscribe(channel=channel)
         GPIO.cleanup()
