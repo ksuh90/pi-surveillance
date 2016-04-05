@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import time
+import requests
 from datetime import datetime
 import ConfigParser
 from pubnub import Pubnub 
@@ -12,24 +14,21 @@ from cloudant.account import Cloudant
 config = ConfigParser.ConfigParser()
 config.read('config.ini')
 
-# initialize variables from config.ini
-publish_key       = config.get('Pubnub', 'publish_key')
-subscribe_key     = config.get('Pubnub', 'subscribe_key')
-email             = config.get('Email', 'email')
-camera_resolution = config.get('Camera', 'resolution')
-border_distance   = int(config.get('Border', 'distance'))
-db_name           = config.get('Cloudant', 'db_name')
-db_username       = config.get('Cloudant', 'username')
-db_api_key        = config.get('Cloudant', 'api_key')
-db_api_pass       = config.get('Cloudant', 'api_pass')
-
 # connect to cloudant
-cloudant = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
+db_name      = config.get('Cloudant', 'db_name')
+db_username  = config.get('Cloudant', 'username')
+db_api_key   = config.get('Cloudant', 'api_key')
+db_api_pass  = config.get('Cloudant', 'api_pass')
+cloudant     = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
 cloudant.connect()
 
 # Pubnub api setup
-pubnub = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
-channel = 'Rangefinder'
+#pubnub = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
+#channel = 'Rangefinder'
+#
+# pubub stuff...
+# publish_key       = config.get('Pubnub', 'publish_key')
+# subscribe_key     = config.get('Pubnub', 'subscribe_key')
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -44,7 +43,6 @@ GREEN_LED = 13                  # for the LEDs
 RED_LED = 26                    # green : indicates if the system is running
 GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates the alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
-
 
 
 def upload(timestamp, filename, manual=False):
@@ -65,28 +63,51 @@ def upload(timestamp, filename, manual=False):
     
     if new_document.exists():
         print 'Upload success!'
+        return new_document['_id']
 
+def send_email(timestamp, filename, docid):
+    print 'Sending email...'
+    url_img = 'https://%s:%s@%s.cloudant.com/%s/%s/%s' % \
+              (db_api_key, db_api_pass, db_username, db_name, docid, filename)
+    payload = {
+        'option'     : 'email',
+        'timestamp'  : timestamp,
+        'secret_hash': config.get('Secret', 'hash'),
+        'email'      : config.get('Email', 'email'),
+        'filename'   : filename,
+        'url_img'    : url_img,
+        'url_webpage': config.get('API', 'webpage'),
+    }
+    url = config.get('API', 'email')
+    r = requests.post(url, payload);
+    print r.text
 
 def say_cheese(timestamp):
-    filename = timestamp+'.jpg'
+    filename = timestamp + '.jpg'
+    camera_resolution = config.get('Camera', 'resolution')
     command = "fswebcam -r %s %s" % (camera_resolution, 'img/'+filename)
     os.system(command)
     return filename
 
-
 def alert_owner(timestamp):
 
-    print '!!!!! Intruder Alert !!!!!'
+    print '\r\n!!!!! Intruder Alert !!!!!\r\n'
 
     format = '%Y-%m-%dT%H-%M-%S'
-    timestamp_formatted = datetime.fromtimestamp(timestamp).strftime(format)
-    filename = say_cheese(timestamp_formatted)
-    upload(timestamp_formatted, filename)
-    # POST call to https://k-suh.com/api/pi-surveillance
-
+    # format the timestamp so its readable
+    timestamp = datetime.fromtimestamp(timestamp).strftime(format)
+    filename = say_cheese(timestamp)
+    docid = upload(timestamp, filename)
+    send_email(timestamp, filename, docid)
 
 
 if __name__ == '__main__':
+
+    #alert_owner(1111111111)
+    #sys.exit(0)
+
+    # the border distance from the sensor
+    border_distance = int(config.get('Border', 'distance'))
 
     # indicate that the system is running
     GPIO.output(GREEN_LED, True)
