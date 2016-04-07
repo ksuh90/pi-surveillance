@@ -26,7 +26,7 @@ module.exports = React.createClass({
         });
 
         return (
-            <ul className="nav nav-sidebar">
+            <ul className={that.props.classNames}>
                 {navList}
             </ul>
         );

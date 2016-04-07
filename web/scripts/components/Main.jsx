@@ -68,8 +68,11 @@ var Container = React.createClass({
                             <a className="navbar-brand" href="#">{"pi-surveillance"}</a>
                         </div>
                         <div id="navbar" className="navbar-collapse collapse">
-                            <ul className="nav navbar-nav navbar-right">
-                            </ul>
+                            <Nav
+                                classNames={"nav navbar-nav navbar-right"}
+                                nav={nav}
+                                currentNavKey={this.state.currentNavKey}
+                                onNavClick={this.handleNavClick} />
                         </div>
                     </div>
                 </nav>
@@ -78,6 +81,7 @@ var Container = React.createClass({
                     <div className="row">
                         <div className="col-sm-3 col-md-2 sidebar">
                             <Nav
+                                classNames={"nav nav-sidebar"}
                                 nav={nav}
                                 currentNavKey={this.state.currentNavKey}
                                 onNavClick={this.handleNavClick} />
