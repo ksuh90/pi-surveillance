@@ -18,7 +18,7 @@ module.exports = React.createClass({
             url         : that.props.app.url.api,
             type        : 'POST',
             dataType    : 'json',
-            data        : {option:'get_log'},
+            data        : {option: 'get_log'},
 
             success: function(r) {
                 console.log(r);
@@ -47,6 +47,26 @@ module.exports = React.createClass({
     componentWillUnmount: function() {
         this.serverRequest.abort();
     },
+    handleMore: function() {
+        var that = this;
+        var log = document.getElementById('log');
+        /*
+        $.ajax({
+            url : that.props.app.url.api,
+            type : 'POST',
+            type: 'json',
+            data : {
+                option: 'get_log',
+                skip: log.childElementCount
+            },
+
+            success: function(r) {
+                log.appendChild(r.log);
+            }.bind(this)
+        });
+
+         */
+    },
     render: function() {
         var that = this;
 
@@ -59,7 +79,7 @@ module.exports = React.createClass({
         });
 
         return (
-            <div className="log">
+            <div id="log" className="log">
                 {rows}
             </div>
         );
