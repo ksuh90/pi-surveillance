@@ -3,6 +3,7 @@
 import os
 import sys
 import time
+import json
 import requests
 from datetime import datetime
 import ConfigParser
@@ -23,10 +24,10 @@ cloudant     = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cl
 cloudant.connect()
 
 # Pubnub setup
-publish_key   = config.get('Pubnub', 'publish_key')
-subscribe_key = config.get('Pubnub', 'subscribe_key')
-pubnub        = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
-channel       = 'pi-surveillance'
+publish_key    = config.get('Pubnub', 'publish_key')
+subscribe_key  = config.get('Pubnub', 'subscribe_key')
+pubnub_channel = config.get('Pubnub', 'channel')
+pubnub         = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -42,93 +43,119 @@ RED_LED = 26                    # green : indicates if the system is running
 GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates the alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
 
+def callback(resp, channel):
+    print('PUBNUB callback')
+    try:
+        if (resp['type'] == 'control'):
+            control(resp['option'])
+    except:
+        pass
+    finally:
+        pass    
 
-def callback(message, channel):
-    print(message)
-    if (message == 'off'):
-        pubnub.unsubscribe(channel=channel)
-  
-  
 def error(message):
-    print("ERROR : " + str(message))
-  
-  
+    print("PUBNUB: ERROR : " + str(message))
+   
 def connect(message):
-    print("CONNECTED")
-    print pubnub.publish(channel=channel, message='Hello from the PubNub Python SDK')
-  
-  
+    print("PUBNUB: CONNECTED")
   
 def reconnect(message):
-    print("RECONNECTED")
-  
+    print("PUBNUB: RECONNECTED") 
   
 def disconnect(message):
-    print("DISCONNECTED")
+    print("PUBNUB: DISCONNECTED")
   
-  
-pubnub.subscribe(channels=channel, callback=callback, error=callback,
+pubnub.subscribe(channels=pubnub_channel, callback=callback, error=callback,
                  connect=connect, reconnect=reconnect, disconnect=disconnect)
 
-def upload(timestamp, filename, manual=False):
+def prettify_time(timestamp):
+    format = '%Y-%m-%dT%H-%M-%S'
+    return datetime.fromtimestamp(timestamp).strftime(format)
 
-    print 'Uploading to db...'
-    
-    db = cloudant[db_name]
+def create_docid(timestamp):
+    print('creating docid')
+    format = "log:%Y%m%dT%H%M%S"
+    return datetime.fromtimestamp(timestamp).strftime(format)
+
+def upload(docid, pretty_timestamp, filename, manual=False):
+    print('Uploading to db...')
+
     data = {
-        'timestamp': timestamp,
+        '_id'      : docid,
+        'timestamp': pretty_timestamp,
         'filename' : filename,
         'manual'   : manual
     }
-    new_document = db.create_document(data)
+
+    new_document = cloudant[db_name].create_document(data)
     fp = open('img/'+filename, 'rb')
     data = fp.read()
     fp.close()
     new_document.put_attachment(filename, 'image/jpeg', data)
-    
-    if new_document.exists():
-        print 'Upload success!'
-        return new_document['_id']
 
-def send_email(timestamp, filename, docid):
-    print 'Sending email...'
+    if new_document.exists():
+        print('Upload success!')
+        # send live feed to webpage
+        payload = {'type': 'doc', 'doc': new_document}
+        pubnub.publish(pubnub_channel, payload)
+        return True
+
+    print('Failed to upload image.')
+    return False
+
+def send_email(pretty_timestamp, filename, docid):
+    print('Sending email...')
 
     url_img = 'https://%s:%s@%s.cloudant.com/%s/%s/%s' % \
               (db_api_key, db_api_pass, db_username, db_name, docid, filename)
 
     payload = {
         'option'     : 'email',
-        'timestamp'  : timestamp,
-        'secret_hash': config.get('Secret', 'hash'),
+        'timestamp'  : pretty_timestamp,
+        'secret_key' : config.get('Secret', 'key'),
         'email'      : config.get('Email', 'email'),
         'filename'   : filename,
         'url_img'    : url_img,
-        'url_webpage': config.get('API', 'webpage'),
+        'img_type'   : 'image/jpeg',
+        'url_webpage': config.get('API', 'control_webpage'),
     }
     url = config.get('API', 'email')
-    r = requests.post(url, payload);
-    print r.text
+    r = requests.post(url, payload)
+    print(r.text)
 
-def say_cheese(timestamp):
-    filename = timestamp + '.jpg'
+def say_cheese(pretty_timestamp):
+    filename = pretty_timestamp + '.jpg'
     camera_resolution = config.get('Camera', 'resolution')
     command = "fswebcam -r %s %s" % (camera_resolution, 'img/'+filename)
     os.system(command)
     return filename
 
 def alert_owner(timestamp):
+    print('\r\n!!!!! Intruder Alert !!!!!\r\n')
+    docid = create_docid(timestamp)
+    pretty_timestamp = prettify_time(timestamp)
+    filename = say_cheese(pretty_timestamp)
+    upload(docid, pretty_timestamp, filename)
+    send_email(pretty_timestamp, filename, docid)
 
-    print '\r\n!!!!! Intruder Alert !!!!!\r\n'
+def control(option):
+    print('Pubnub CONTROL: ' + option)
+    timestamp = time.time()
+    pretty_timestamp = prettify_time(timestamp)
 
-    format = '%Y-%m-%dT%H-%M-%S'
-    # format the timestamp so its readable
-    timestamp = datetime.fromtimestamp(timestamp).strftime(format)
-    # filename = say_cheese(timestamp)
-    # docid = upload(timestamp, filename)
-    # send_email(timestamp, filename, docid)
-    print 'pubnub....'
-    #message = {'time': timestamp}
-    #pubnub.publish(channel, message)
+    if option == 'take_pic':
+        filename = say_cheese(pretty_timestamp)
+        docid = create_docid(timestamp)
+        upload(docid, pretty_timestamp, filename, True)
+    elif option == 'pause':
+        aa = 111
+    elif option == 'resume':
+        aa = 111
+    elif option == 'off':
+        aa = 111
+        #pubnub.unsubscribe(pubnub_channel)
+    else:
+        print('Unknown option.')
 
 
 if __name__ == '__main__':
@@ -145,12 +172,12 @@ if __name__ == '__main__':
 
     # Boot the trigger
     GPIO.output(TRIG, False)
-    print 'Booting  the sensor...'
+    print('Booting  the sensor...')
     time.sleep(3)
 
 
     try:
-        print 'Press Ctrl-C to quit.'
+        print('Press Ctrl-C to quit.')
         while True:
             # Fire the trigger
             GPIO.output(TRIG, True)
@@ -180,7 +207,7 @@ if __name__ == '__main__':
             # Round out distance(in centimeters) for simplicity and print.
             distance = round(distance, 0)
 
-            print 'Distance: %s cm' % (distance)
+            print('Distance: %s cm' % (distance))
 
             # test if proximity breached the border
             if (distance < border_distance):
@@ -191,6 +218,6 @@ if __name__ == '__main__':
             time.sleep(1)
 
     finally:
-        print 'Shutting down system...'
-        pubnub.unsubscribe(channel=channel)
+        print('Shutting down system...')
+        pubnub.unsubscribe(channel=pubnub_channel)
         GPIO.cleanup()

@@ -1,17 +1,21 @@
-<!doctype html>
-<html class="no-js" lang="">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="x-ua-compatible" content="ie=edge">
-        <title>pi-surveillance</title>
+<?php
+//require_once '../../../pi-surveillance-module/bootstrap.php';
+require_once '../../pi-surveillance-module/bootstrap.php';
+require_once $config['PATH_MODULE'] . 'Password.php';
 
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css">
-    </head>
-    <body>
+session_start();
+$path_module = $config['PATH_MODULE'];
 
-        <div id="container">This will be the control room.</div>
+if (strtolower($_SERVER['REQUEST_METHOD']) === 'post') {
+    // verify credentials
+    if (
+    	password_verify($_POST['p'], $config['PASSWORD_HASH']) &&
+    	$_POST['csrfToken'] === $_SESSION['csrfToken']
+    ){
+    	require_once $path_module . 'pages/Main.php';
+        exit;
+    }
+}
 
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js"></script>
-    </body>
-</html>
+require_once $path_module . 'pages/Signin.php';
+?>
