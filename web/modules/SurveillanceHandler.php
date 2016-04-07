@@ -29,8 +29,9 @@ class SurveillanceHandler {
         $auth = $config['CLOUDANT_API_KEY'].':'.$config['CLOUDANT_API_PASS'];
         $host = $config['CLOUDANT_HOST'];
         $db_name = $config['CLOUDANT_DB_NAME'];
+        $skip = isset($data['skip']) ? '&skip='.$data['skip'] : '';
         $url = "https://{$auth}@{$host}/{$db_name}/_design/view/_view/log" .
-               "?reduce=false&include_docs=true&descending=true";
+               "?reduce=false&include_docs=true&descending=true&limit=20{$skip}";
         $log = json_decode(file_get_contents($url))->rows;
         foreach ($log as $key => $value) {
             unset($value->doc->_rev);
