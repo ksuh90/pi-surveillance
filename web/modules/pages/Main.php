@@ -32,7 +32,7 @@ $style = $config['URL_BASE'] . 'css/style.css';
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.blockUI/2.70/jquery.blockUI.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js"></script>
-        <script src="http://cdn.pubnub.com/pubnub-3.14.5.min.js"></script>
+        <script src="https://cdn.pubnub.com/pubnub-3.14.5.min.js"></script>
         <script src="<?php echo $js; ?>"></script>
     </body>
 </html>
