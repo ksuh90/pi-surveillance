@@ -98,6 +98,7 @@ var APP = window.APP || {};
 APP.pubnub = PUBNUB.init({
     publish_key: APP.pubnub_pub_key,
     subscribe_key: APP.pubnub_sub_key,
+    ssl : (('https:' == document.location.protocol) ? true : false),
     error: function (error) {
         console.log('Error:', error);
     }
