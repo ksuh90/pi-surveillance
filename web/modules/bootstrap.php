@@ -6,7 +6,8 @@ $config = parse_ini_file("config.ini");
 error_reporting(E_ALL);
 
 
-/*spl_autoload_register(function($className) {
+spl_autoload_register(function($className) {
+	global $config;
     $nsLen = strlen(__NAMESPACE__);
     if (!($nsLen) || substr($className, 0, $nsLen + 1) == __NAMESPACE__ . '\\') {
         $path = strtr(substr($className, $nsLen), '\\', '/') . '.php';
@@ -14,4 +15,4 @@ error_reporting(E_ALL);
             require_once $config['PATH_MODULE'] . $path;
         }
     }
-});*/
+});
