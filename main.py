@@ -159,7 +159,7 @@ def alert(PIR_PIN):
 
 def control(option):
     print('Pubnub control option: ' + option)
-    GPIO.output(GREEN_BLUE, True)
+    GPIO.output(BLUE_LED, True)
     t = time.time()
     t_pretty = prettify_time(t)
     msg = ''
@@ -179,7 +179,7 @@ def control(option):
 
     # publish the response object
     pubnub.publish(pubnub_channel, {'type': 'control_resp', 'msg': msg})
-    GPIO.output(GREEN_BLUE, False)
+    GPIO.output(BLUE_LED, False)
 
 
 if __name__ == '__main__':
