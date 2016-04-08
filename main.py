@@ -10,6 +10,7 @@ import ConfigParser
 from pubnub import Pubnub 
 import RPi.GPIO as GPIO
 from cloudant.account import Cloudant
+from cloudant.database import CloudantDatabase
 
 
 config = ConfigParser.ConfigParser()
@@ -20,8 +21,8 @@ db_name      = config.get('Cloudant', 'db_name')
 db_username  = config.get('Cloudant', 'username')
 db_api_key   = config.get('Cloudant', 'api_key')
 db_api_pass  = config.get('Cloudant', 'api_pass')
-cloudant     = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
-cloudant.connect()
+client = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
+client.connect()
 
 # Pubnub setup
 publish_key    = config.get('Pubnub', 'publish_key')
@@ -37,13 +38,13 @@ PIR_PIN = 18                  # for sensors
 GPIO.setup(PIR_PIN, GPIO.IN)  # 
 
 GREEN_LED = 13                  # for the LEDs
-RED_LED = 26                    # green : indicates if the system is running
-GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates the alert
+RED_LED = 26                    # green : indicates that the system is running
+GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
 
 def callback(resp, channel):
     try:
-        if (resp['type'] == 'control'):
+        if (resp['type'] == 'control_request'):
             print('Pubnub: callback')
             control(resp['option'])
     except:
@@ -52,16 +53,16 @@ def callback(resp, channel):
         pass    
 
 def error(message):
-    print("Pubnub: ERROR : " + str(message))
+    print('Pubnub: ERROR : ' + str(message))
    
 def connect(message):
-    print("Pubnub: connected")
+    print('Pubnub: connected')
   
 def reconnect(message):
-    print("Pubnub: reconnected") 
+    print('Pubnub: reconnected') 
   
 def disconnect(message):
-    print("Pubnub: disconnected")
+    print('Pubnub: disconnected')
   
 pubnub.subscribe(channels=pubnub_channel, callback=callback, error=callback,
                  connect=connect, reconnect=reconnect, disconnect=disconnect)
@@ -71,20 +72,29 @@ def prettify_time(timestamp):
     return datetime.fromtimestamp(timestamp).strftime(format)
 
 def create_docid(timestamp):
-    format = "log:%Y%m%dT%H%M%S"
+    format = 'log:%Y%m%dT%H%M%S'
     return datetime.fromtimestamp(timestamp).strftime(format)
 
 def upload(docid, t_pretty, filename, manual=False):
     print('Uploading to db...')
 
+    # compute the pk for this new entry
+    db = CloudantDatabase(client, db_name)
+    resp = db.get_view_raw_result('_design/view', 'log', reduce=True)
+    if not resp['rows']:
+        pk = 1
+    else:
+        pk = resp['rows'][0]['value']
+        pk += 1
+
     data = {
         '_id'      : docid,
+        'pk'       : pk,
         'timestamp': t_pretty,
         'filename' : filename,
         'manual'   : manual
     }
-
-    new_document = cloudant[db_name].create_document(data)
+    new_document = client[db_name].create_document(data)
     fp = open('img/'+filename, 'rb')
     data = fp.read()
     fp.close()
@@ -105,7 +115,6 @@ def send_email(t_pretty, filename, docid):
 
     url_img = 'https://%s:%s@%s.cloudant.com/%s/%s/%s' % \
               (db_api_key, db_api_pass, db_username, db_name, docid, filename)
-
     payload = {
         'option'     : 'email',
         'timestamp'  : t_pretty,
@@ -123,63 +132,69 @@ def send_email(t_pretty, filename, docid):
 def say_cheese(t_pretty):
     filename = t_pretty + '.jpg'
     camera_resolution = config.get('Camera', 'resolution')
-    command = "fswebcam -r %s %s" % (camera_resolution, 'img/'+filename)
+    command = 'fswebcam -r %s %s' % (camera_resolution, 'img/'+filename)
     os.system(command)
     return filename
 
 def alert(PIR_PIN):
-    # red led ON
-    GPIO.output(RED_LED, True)
+    # # red led ON
+    # GPIO.output(RED_LED, True)
 
-    print('\r\n!!!!! Intruder Alert !!!!!\r\n')
+    # print('\r\n!!!!! Intruder Alert !!!!!\r\n')
 
-    t        = time.time()
-    docid    = create_docid(t)
-    t_pretty = prettify_time(t)
-    filename = say_cheese(t_pretty)
+    # t        = time.time()
+    # docid    = create_docid(t)
+    # t_pretty = prettify_time(t)
+    # filename = say_cheese(t_pretty)
 
-    upload(docid, t_pretty, filename)
-    send_email(t_pretty, filename, docid)
+    # upload(docid, t_pretty, filename)
+    # send_email(t_pretty, filename, docid)
 
-    # red led OFF
-    GPIO.output(RED_LED, False)
+    # # red led OFF
+    # GPIO.output(RED_LED, False)
+    return True
+
 
 def control(option):
-    print('Pubnub CONTROL: ' + option)
+    print('Pubnub control option: ' + option)
+
     t = time.time()
     t_pretty = prettify_time(t)
-
+    msg = ''
     if option == 'take_pic':
-        filename = say_cheese(t_pretty)
-        docid    = create_docid(t)
-        upload(docid, t_pretty, filename, True)
+        if (upload(
+            create_docid(t), t_pretty, say_cheese(t_pretty), True)):
+            msg = 'Picture taken!'
+    elif option == 'ping':
+        msg = 'Pong!'
     elif option == 'pause':
         aa = 111
     elif option == 'resume':
         aa = 111
-    elif option == 'off':
-        aa = 111
-        #pubnub.unsubscribe(pubnub_channel)
     else:
-        print('Unknown option.')
+        msg = 'Unknown remote control option.'
+        print(msg)
+
+    # publish the response object
+    pubnub.publish(pubnub_channel, {'type': 'control_resp', 'msg': msg})
 
 
 if __name__ == '__main__':
 
-    # indicate that the system is running
-    GPIO.output(GREEN_LED, True)
+    # ensure red led is off
     GPIO.output(RED_LED, False)
 
     try:
-        print('Booting sensor...')
+        print('Booting system...')
         GPIO.add_event_detect(PIR_PIN, GPIO.RISING, callback=alert)
+        
+        # indicate the system is ready
+        GPIO.output(GREEN_LED, True)
+
         while True:
             time.sleep(100)
 
-    except KeyboardInterrupt:
-        print "Shutting down."
-
     finally:
-        print('System shutdown.')
+        print('Shutting down...')
         pubnub.unsubscribe(channel=pubnub_channel)
         GPIO.cleanup()
