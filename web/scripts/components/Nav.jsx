@@ -12,8 +12,8 @@ module.exports = React.createClass({
     render: function() {
 
         var that = this;
-        var navList = $.map(this.props.nav, function(v, k){
 
+        var navList = $.map(this.props.nav, function(v, k){
             var active = (k == that.props.currentNavKey) ? 'active' : '';
             return (
                 <li key={k} className={active}>

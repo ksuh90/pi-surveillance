@@ -11,7 +11,7 @@ module.exports = React.createClass({
     },
     render: function() {
         return (
-            <div className={this.statusClass} role="alert">
+            <div className={this.statusClass()} role="alert">
                 <strong>{this.props.msg}</strong>
             </div>
         );

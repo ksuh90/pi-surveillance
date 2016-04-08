@@ -10,6 +10,7 @@ module.exports = React.createClass({
 
     render: function() {       
         var that = this;
+        
         var controls = [
             {
                 option: 'take_pic',
@@ -26,11 +27,11 @@ module.exports = React.createClass({
                 label: 'Resume',
                 desc: 'Resume paused system.'
             },
-            /*{
-                option: 'off',
-                label: 'Off',
-                desc: 'Completely shut down the system.'
-            }*/
+            {
+                option: 'ping',
+                label: 'Ping',
+                desc: 'Ping the pi-surveillance system'
+            }
         ];
         var rows = $.map(controls, function(row, key){
             return (
@@ -47,12 +48,33 @@ module.exports = React.createClass({
 var Control = React.createClass({
 
     getInitialState: function() {
-        return {
-            statusComponent: ''
-        };
+        return { statusComponent: ''};
+    },
+    componentDidMount: function() {
+        var that = this;
+        
+        that.props.app.pubnub.subscribe({
+            channel: that.props.app.pubnub_channel,
+            message: function(r){
+                console.log('ControlPanel : ');
+                console.log(r);
+                if (r.type == 'control_resp') {
+                    var status = <StatusAlert status={true} msg={r.msg} />;
+                    that.setState({statusComponent: status});
+                    $.unblockUI();
+                }
+            },
+            error: function (error) {
+                var status = <StatusAlert status={false} msg={JSON.stringify(error)} />;
+                that.setState({statusComponent: status});
+                //console.log(JSON.stringify(error));
+            }
+        });
+        
     },
     controlClick: function(option) {
         var that = this;
+
         console.log('remote control option: '+option);
         that.setState({statusComponent: ''});
         $.blockUI.defaults.message = '';
@@ -60,7 +82,7 @@ var Control = React.createClass({
 
         // publish control option via pubnub
         var payload = {
-            type: 'control',
+            type: 'control_request',
             option: option
         };
         that.props.app.pubnub.publish({
@@ -69,7 +91,6 @@ var Control = React.createClass({
             callback : function(m){
                 console.log('Control : pubnub : publish :');
                 console.log(m);
-                $.unblockUI();
             }
         });    
     },
@@ -78,6 +99,7 @@ var Control = React.createClass({
             <div className="jumbotron control-slot">
                 <h3>{this.props.row.label}</h3>
                 <p>{this.props.row.desc}</p>
+                <div className="status-container">{this.state.statusComponent}</div>
                 <button
                     type="button"
                     className="btn btn-lg btn-primary btn-control"
