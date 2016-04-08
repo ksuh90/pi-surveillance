@@ -30,9 +30,9 @@ class SurveillanceHandler {
         $host = $config['CLOUDANT_HOST'];
         $db_name = $config['CLOUDANT_DB_NAME'];
         $skip = isset($data['skip']) ? '&skip='.$data['skip'] : '';
-        $url = "https://{$auth}@{$host}/{$db_name}/_design/view/_view/log" .
-               "?reduce=false&include_docs=true&descending=true&limit=20{$skip}";
-        $log = json_decode(file_get_contents($url))->rows;
+        $url = "https://{$auth}@{$host}/{$db_name}/_design/view/_view/log";
+        $query = "?reduce=false&include_docs=true&descending=true&limit=20{$skip}";
+        $log = json_decode(file_get_contents($url.$query))->rows;
         foreach ($log as $key => $value) {
             unset($value->doc->_rev);
             $log[$key] = $value->doc;
@@ -78,5 +78,4 @@ EOT;
     private function respond() {
         echo json_encode($this->resp);
     }
-   
 }
