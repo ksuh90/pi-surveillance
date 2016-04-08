@@ -39,8 +39,10 @@ GPIO.setup(PIR_PIN, GPIO.IN)  #
 
 GREEN_LED = 13                  # for the LEDs
 RED_LED = 26                    # green : indicates that the system is running
+BLUE_LED = 5                    # blue : indicates remote command
 GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
+GPIO.setup(BLUE_LED, GPIO.OUT)   #
 
 def callback(resp, channel):
     try:
@@ -157,7 +159,7 @@ def alert(PIR_PIN):
 
 def control(option):
     print('Pubnub control option: ' + option)
-
+    GPIO.output(GREEN_BLUE, True)
     t = time.time()
     t_pretty = prettify_time(t)
     msg = ''
@@ -177,6 +179,7 @@ def control(option):
 
     # publish the response object
     pubnub.publish(pubnub_channel, {'type': 'control_resp', 'msg': msg})
+    GPIO.output(GREEN_BLUE, False)
 
 
 if __name__ == '__main__':
