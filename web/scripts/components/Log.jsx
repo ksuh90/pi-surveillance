@@ -8,9 +8,7 @@ var React = require('react');
 module.exports = React.createClass({
 
     getInitialState: function() {
-        return {
-            log: null,
-        };
+        return {log: null};
     },
     componentDidMount: function() {
         var that = this;
@@ -42,7 +40,7 @@ module.exports = React.createClass({
               // Handle error here
               console.log(JSON.stringify(error));
             }
-         });
+        });
     },
     componentWillUnmount: function() {
         this.serverRequest.abort();
@@ -71,13 +69,11 @@ module.exports = React.createClass({
         var that = this;
 
         if (!that.state.log) return null;
-
         var rows = $.map(that.state.log, function(v, k){
             return(
                 <LogRow doc={v} key={k} app={that.props.app} />
             );
         });
-
         return (
             <div id="log" className="log">
                 {rows}
@@ -89,21 +85,24 @@ module.exports = React.createClass({
 var LogRow = React.createClass({
 
     render: function() {
-        var doc = this.props.doc;
-        var src = this.props.app.url.img + 'id=' + doc._id + '&f=' + doc.filename;
-        var type = doc.manual ? 'manual' : 'pi';
-        var rowClass = "row placeholders "+type;
-        var colClass = "col-sm-4 col-xs-12 placeholder vcenter";
+        var doc = this.props.doc,
+            src = this.props.app.url.img + 'id=' + doc._id + '&f=' + doc.filename,
+            type = doc.manual ? 'manual' : 'pi',
+            rowClass = 'row placeholders ' + type,
+            colClass = "col-sm-3 col-xs-12 placeholder vcenter";
 
         return(
             <div className={rowClass}>
+                <div className={colClass}>
+                    {doc.pk}
+                </div>
                 <div className={colClass}>
                     <a href={src} target="_blank">
                         <img className="img-responsive" src={src} />
                     </a>
                 </div>
                 <div className={colClass}>
-                    {doc.timestamp}<br />{"(UTC)"}
+                    {doc.timestamp}<br />{'(UTC)'}
                 </div>
                 <div className={colClass}>
                     {type}
