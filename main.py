@@ -33,10 +33,8 @@ pubnub         = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
-TRIG = 23                   # for sensors
-ECHO = 12                   # 
-GPIO.setup(TRIG,GPIO.OUT)   #
-GPIO.setup(ECHO,GPIO.IN)    #
+PIR_PIN = 18                  # for sensors
+GPIO.setup(PIR_PIN, GPIO.IN)  # 
 
 GREEN_LED = 13                  # for the LEDs
 RED_LED = 26                    # green : indicates if the system is running
@@ -44,9 +42,9 @@ GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates the alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
 
 def callback(resp, channel):
-    print('PUBNUB callback')
     try:
         if (resp['type'] == 'control'):
+            print('Pubnub: callback')
             control(resp['option'])
     except:
         pass
@@ -54,16 +52,16 @@ def callback(resp, channel):
         pass    
 
 def error(message):
-    print("PUBNUB: ERROR : " + str(message))
+    print("Pubnub: ERROR : " + str(message))
    
 def connect(message):
-    print("PUBNUB: CONNECTED")
+    print("Pubnub: connected")
   
 def reconnect(message):
-    print("PUBNUB: RECONNECTED") 
+    print("Pubnub: reconnected") 
   
 def disconnect(message):
-    print("PUBNUB: DISCONNECTED")
+    print("Pubnub: disconnected")
   
 pubnub.subscribe(channels=pubnub_channel, callback=callback, error=callback,
                  connect=connect, reconnect=reconnect, disconnect=disconnect)
@@ -73,16 +71,15 @@ def prettify_time(timestamp):
     return datetime.fromtimestamp(timestamp).strftime(format)
 
 def create_docid(timestamp):
-    print('creating docid')
     format = "log:%Y%m%dT%H%M%S"
     return datetime.fromtimestamp(timestamp).strftime(format)
 
-def upload(docid, pretty_timestamp, filename, manual=False):
+def upload(docid, t_pretty, filename, manual=False):
     print('Uploading to db...')
 
     data = {
         '_id'      : docid,
-        'timestamp': pretty_timestamp,
+        'timestamp': t_pretty,
         'filename' : filename,
         'manual'   : manual
     }
@@ -103,7 +100,7 @@ def upload(docid, pretty_timestamp, filename, manual=False):
     print('Failed to upload image.')
     return False
 
-def send_email(pretty_timestamp, filename, docid):
+def send_email(t_pretty, filename, docid):
     print('Sending email...')
 
     url_img = 'https://%s:%s@%s.cloudant.com/%s/%s/%s' % \
@@ -111,7 +108,7 @@ def send_email(pretty_timestamp, filename, docid):
 
     payload = {
         'option'     : 'email',
-        'timestamp'  : pretty_timestamp,
+        'timestamp'  : t_pretty,
         'secret_key' : config.get('Secret', 'key'),
         'email'      : config.get('Email', 'email'),
         'filename'   : filename,
@@ -123,30 +120,39 @@ def send_email(pretty_timestamp, filename, docid):
     r = requests.post(url, payload)
     print(r.text)
 
-def say_cheese(pretty_timestamp):
-    filename = pretty_timestamp + '.jpg'
+def say_cheese(t_pretty):
+    filename = t_pretty + '.jpg'
     camera_resolution = config.get('Camera', 'resolution')
     command = "fswebcam -r %s %s" % (camera_resolution, 'img/'+filename)
     os.system(command)
     return filename
 
-def alert_owner(timestamp):
+def alert(PIR_PIN):
+    # red led ON
+    GPIO.output(RED_LED, True)
+
     print('\r\n!!!!! Intruder Alert !!!!!\r\n')
-    docid = create_docid(timestamp)
-    pretty_timestamp = prettify_time(timestamp)
-    filename = say_cheese(pretty_timestamp)
-    upload(docid, pretty_timestamp, filename)
-    send_email(pretty_timestamp, filename, docid)
+
+    t        = time.time()
+    docid    = create_docid(t)
+    t_pretty = prettify_time(t)
+    filename = say_cheese(t_pretty)
+
+    upload(docid, t_pretty, filename)
+    send_email(t_pretty, filename, docid)
+
+    # red led OFF
+    GPIO.output(RED_LED, False)
 
 def control(option):
     print('Pubnub CONTROL: ' + option)
-    timestamp = time.time()
-    pretty_timestamp = prettify_time(timestamp)
+    t = time.time()
+    t_pretty = prettify_time(t)
 
     if option == 'take_pic':
-        filename = say_cheese(pretty_timestamp)
-        docid = create_docid(timestamp)
-        upload(docid, pretty_timestamp, filename, True)
+        filename = say_cheese(t_pretty)
+        docid    = create_docid(t)
+        upload(docid, t_pretty, filename, True)
     elif option == 'pause':
         aa = 111
     elif option == 'resume':
@@ -160,64 +166,20 @@ def control(option):
 
 if __name__ == '__main__':
 
-    #alert_owner(1111111111)
-    #sys.exit(0)
-
-    # the border distance from the sensor
-    border_distance = int(config.get('Border', 'distance'))
-
     # indicate that the system is running
     GPIO.output(GREEN_LED, True)
     GPIO.output(RED_LED, False)
 
-    # Boot the trigger
-    GPIO.output(TRIG, False)
-    print('Booting  the sensor...')
-    time.sleep(3)
-
-
     try:
-        print('Press Ctrl-C to quit.')
+        print('Booting sensor...')
+        GPIO.add_event_detect(PIR_PIN, GPIO.RISING, callback=alert)
         while True:
-            # Fire the trigger
-            GPIO.output(TRIG, True)
-            time.sleep(0.00001)
-            GPIO.output(TRIG, False)
+            time.sleep(100)
 
-            # Instatiate a time stamp for when a signal is detected by setting beginning + end values.
-            # Then subtract beginning from end to get duration value.
-
-            pulse_start = time.time()
-            while GPIO.input(ECHO) == 0:
-                pulse_start = time.time()
-
-            while GPIO.input(ECHO) == 1:
-                pulse_end = time.time()
-
-            pulse_duration = pulse_end - pulse_start
-
-            # Speed of sound at sea-level is 343 m/s.
-            # 34300 cm/s = Distance/Time; 34300 cm/s = Speed of sound;
-            # "Time" is there and back; divide by 2 to get time-to-object only.
-            # So: 34300 = Distance/(Time/2) >>> speed of sound = distance/one-way time
-
-            # Simplify + Flip it: distance = pulse_duration x 17150
-            distance = pulse_duration * 17150
-
-            # Round out distance(in centimeters) for simplicity and print.
-            distance = round(distance, 0)
-
-            print('Distance: %s cm' % (distance))
-
-            # test if proximity breached the border
-            if (distance < border_distance):
-                GPIO.output(RED_LED, True)
-                alert_owner(pulse_start)
-                GPIO.output(RED_LED, False)
-
-            time.sleep(1)
+    except KeyboardInterrupt:
+        print "Shutting down."
 
     finally:
-        print('Shutting down system...')
+        print('System shutdown.')
         pubnub.unsubscribe(channel=pubnub_channel)
         GPIO.cleanup()
