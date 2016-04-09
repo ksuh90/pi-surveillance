@@ -42,7 +42,10 @@ RED_LED = 26                    # green : indicates that the system is running
 BLUE_LED = 5                    # blue : indicates remote command
 GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
-GPIO.setup(BLUE_LED, GPIO.OUT)   #
+GPIO.setup(BLUE_LED, GPIO.OUT)  #
+
+# Global state vars
+system_paused = False
 
 def callback(resp, channel):
     try:
@@ -139,27 +142,32 @@ def say_cheese(t_pretty):
     return filename
 
 def alert(PIR_PIN):
-    # # red led ON
-    # GPIO.output(RED_LED, True)
+    global system_paused
+    if system_paused:
+        return True
 
-    # print('\r\n!!!!! Intruder Alert !!!!!\r\n')
+    # red led ON
+    GPIO.output(RED_LED, True)
 
-    # t        = time.time()
-    # docid    = create_docid(t)
-    # t_pretty = prettify_time(t)
-    # filename = say_cheese(t_pretty)
+    print('\r\n!!!!! Intruder Alert !!!!!\r\n')
 
-    # upload(docid, t_pretty, filename)
-    # send_email(t_pretty, filename, docid)
+    t        = time.time()
+    docid    = create_docid(t)
+    t_pretty = prettify_time(t)
+    filename = say_cheese(t_pretty)
 
-    # # red led OFF
-    # GPIO.output(RED_LED, False)
+    upload(docid, t_pretty, filename)
+    send_email(t_pretty, filename, docid)
+
+    # red led OFF
+    GPIO.output(RED_LED, False)
     return True
 
 
 def control(option):
+    global system_paused
     print('Pubnub control option: ' + option)
-    GPIO.output(BLUE_LED, True)
+    #GPIO.output(BLUE_LED, True)
     t = time.time()
     t_pretty = prettify_time(t)
     msg = ''
@@ -170,21 +178,24 @@ def control(option):
     elif option == 'ping':
         msg = 'Pong!'
     elif option == 'pause':
-        aa = 111
+        system_paused = True
+        msg = 'System paused.'
     elif option == 'resume':
-        aa = 111
+        system_paused = False
+        msg = 'Resuming system.'
     else:
         msg = 'Unknown remote control option.'
         print(msg)
 
     # publish the response object
     pubnub.publish(pubnub_channel, {'type': 'control_resp', 'msg': msg})
-    GPIO.output(BLUE_LED, False)
+    #GPIO.output(BLUE_LED, False)
 
 
 if __name__ == '__main__':
 
     # ensure red led is off
+    #time.sleep(10)
     GPIO.output(RED_LED, False)
 
     try:
