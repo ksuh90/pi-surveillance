@@ -9,7 +9,6 @@ class SurveillanceHandler {
 
 
     function __construct(array $data) {
-
         $this->execute_option($data);
     }
 
@@ -47,8 +46,11 @@ class SurveillanceHandler {
             echo 'Invalid secret post values.';
             return;
         }
-
-        $image_data  = file_get_contents($data['url_img']); 
+        $auth = $config['CLOUDANT_API_KEY'].':'.$config['CLOUDANT_API_PASS'];
+        $host = $config['CLOUDANT_HOST'];
+        $db_name = $config['CLOUDANT_DB_NAME'];
+        $url = "https://{$auth}@{$host}/{$db_name}/" . $data['url_image'];
+        $image_data  = file_get_contents($url); 
         $url_webpage = $data['url_webpage'];
         $timestamp   = $data['timestamp'];
         $email       = $data['email'];
