@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import json
+import socket
 import requests
 from datetime import datetime
 import ConfigParser
@@ -21,14 +22,16 @@ db_name      = config.get('Cloudant', 'db_name')
 db_username  = config.get('Cloudant', 'username')
 db_api_key   = config.get('Cloudant', 'api_key')
 db_api_pass  = config.get('Cloudant', 'api_pass')
-client = Cloudant(db_api_key, db_api_pass, url='https://'+db_username+'.cloudant.com')
-client.connect()
+client = Cloudant(db_api_key, db_api_pass, 
+                  url='https://'+db_username+'.cloudant.com')
+# client.connect()
 
 # Pubnub setup
 publish_key    = config.get('Pubnub', 'publish_key')
 subscribe_key  = config.get('Pubnub', 'subscribe_key')
 pubnub_channel = config.get('Pubnub', 'channel')
-pubnub         = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
+pubnub         = Pubnub(publish_key=publish_key,
+                        subscribe_key=subscribe_key)
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -39,13 +42,12 @@ GPIO.setup(PIR_PIN, GPIO.IN)  #
 
 GREEN_LED = 13                  # for the LEDs
 RED_LED = 26                    # green : indicates that the system is running
-BLUE_LED = 5                    # blue : indicates remote command
 GPIO.setup(GREEN_LED, GPIO.OUT) # red : indicates alert
 GPIO.setup(RED_LED, GPIO.OUT)   #
-GPIO.setup(BLUE_LED, GPIO.OUT)  #
 
 # Global state vars
 system_paused = False
+email_notification = True
 
 def callback(resp, channel):
     try:
@@ -69,18 +71,11 @@ def reconnect(message):
 def disconnect(message):
     print('Pubnub: disconnected')
   
-pubnub.subscribe(channels=pubnub_channel, callback=callback, error=callback,
-                 connect=connect, reconnect=reconnect, disconnect=disconnect)
-
 def prettify_time(timestamp):
     format = '%Y-%m-%dT%H-%M-%S'
     return datetime.fromtimestamp(timestamp).strftime(format)
 
-def create_docid(timestamp):
-    format = 'log:%Y%m%dT%H%M%S'
-    return datetime.fromtimestamp(timestamp).strftime(format)
-
-def upload(docid, t_pretty, filename, manual=False):
+def upload(t_pretty, filename, manual=False):
     print('Uploading to db...')
 
     # compute the pk for this new entry
@@ -92,6 +87,7 @@ def upload(docid, t_pretty, filename, manual=False):
         pk = resp['rows'][0]['value']
         pk += 1
 
+    docid = 'log:' + str(pk)
     data = {
         '_id'      : docid,
         'pk'       : pk,
@@ -104,29 +100,25 @@ def upload(docid, t_pretty, filename, manual=False):
     data = fp.read()
     fp.close()
     new_document.put_attachment(filename, 'image/jpeg', data)
-
     if new_document.exists():
         print('Upload success!')
         # send live feed to webpage
         payload = {'type': 'doc', 'doc': new_document}
         pubnub.publish(pubnub_channel, payload)
-        return True
+        return docid
 
     print('Failed to upload image.')
     return False
 
 def send_email(t_pretty, filename, docid):
     print('Sending email...')
-
-    url_img = 'https://%s:%s@%s.cloudant.com/%s/%s/%s' % \
-              (db_api_key, db_api_pass, db_username, db_name, docid, filename)
     payload = {
         'option'     : 'email',
         'timestamp'  : t_pretty,
         'secret_key' : config.get('Secret', 'key'),
         'email'      : config.get('Email', 'email'),
         'filename'   : filename,
-        'url_img'    : url_img,
+        'url_image'  : docid + '/' + filename,
         'img_type'   : 'image/jpeg',
         'url_webpage': config.get('API', 'control_webpage'),
     }
@@ -142,7 +134,7 @@ def say_cheese(t_pretty):
     return filename
 
 def alert(PIR_PIN):
-    global system_paused
+    global system_paused, email_notification
     if system_paused:
         return True
 
@@ -152,50 +144,79 @@ def alert(PIR_PIN):
     print('\r\n!!!!! Intruder Alert !!!!!\r\n')
 
     t        = time.time()
-    docid    = create_docid(t)
     t_pretty = prettify_time(t)
     filename = say_cheese(t_pretty)
-
-    upload(docid, t_pretty, filename)
-    send_email(t_pretty, filename, docid)
+    docid = upload(t_pretty, filename)
+    if (email_notification):
+        send_email(t_pretty, filename, docid)
 
     # red led OFF
     GPIO.output(RED_LED, False)
     return True
 
-
 def control(option):
-    global system_paused
+    global system_paused, email_notification
     print('Pubnub control option: ' + option)
-    #GPIO.output(BLUE_LED, True)
+
     t = time.time()
     t_pretty = prettify_time(t)
     msg = ''
     if option == 'take_pic':
-        if (upload(
-            create_docid(t), t_pretty, say_cheese(t_pretty), True)):
+        if (upload(t_pretty, say_cheese(t_pretty), True)):
             msg = 'Picture taken!'
-    elif option == 'ping':
-        msg = 'Pong!'
     elif option == 'pause':
         system_paused = True
         msg = 'System paused.'
     elif option == 'resume':
         system_paused = False
         msg = 'Resuming system.'
+    elif option == 'email_on':
+        email_notification = True
+        msg = 'Email notification turned on.'
+    elif option == 'email_off':
+        email_notification = False
+        msg = 'Email notification off.'
+    elif option == 'ping':
+        msg = 'Pong!'
+        msg = msg + ('  [System: paused]' if system_paused else '')
+        msg = msg + '  [Email notification: ' + \
+                    ('on' if email_notification else 'off') + ']'
     else:
         msg = 'Unknown remote control option.'
         print(msg)
 
     # publish the response object
     pubnub.publish(pubnub_channel, {'type': 'control_resp', 'msg': msg})
-    #GPIO.output(BLUE_LED, False)
+
+def has_internet():
+    remote_server = 'www.google.com'
+    try:
+        host = socket.gethostbyname(remote_server)
+        s = socket.create_connection((host, 80), 2)
+        return True
+    except:
+        pass
+    return False
 
 
 if __name__ == '__main__':
 
+    # ensure we have internet connection
+    # mark every 10 minutes
+    startup_time = time.time()
+    while not has_internet():
+        elapsed = time.time() - startup_time
+        if elapsed % 600 == 0:
+            print '%s mins without internet connection...' % (elapsed/60)
+
+    # connect to cloudant client
+    client.connect()
+
+    # subscribe to pubnub channel
+    pubnub.subscribe(channels=pubnub_channel, callback=callback, error=callback,
+                 connect=connect, reconnect=reconnect, disconnect=disconnect)
+
     # ensure red led is off
-    #time.sleep(10)
     GPIO.output(RED_LED, False)
 
     try:
