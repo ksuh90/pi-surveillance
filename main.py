@@ -6,10 +6,10 @@ import time
 import json
 import socket
 import requests
-from datetime import datetime
 import ConfigParser
-from pubnub import Pubnub 
 import RPi.GPIO as GPIO
+from datetime import datetime
+from pubnub import Pubnub 
 from cloudant.account import Cloudant
 from cloudant.database import CloudantDatabase
 
@@ -24,7 +24,6 @@ db_api_key   = config.get('Cloudant', 'api_key')
 db_api_pass  = config.get('Cloudant', 'api_pass')
 client = Cloudant(db_api_key, db_api_pass, 
                   url='https://'+db_username+'.cloudant.com')
-# client.connect()
 
 # Pubnub setup
 publish_key    = config.get('Pubnub', 'publish_key')
