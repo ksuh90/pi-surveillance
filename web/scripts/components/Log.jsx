@@ -62,7 +62,6 @@ module.exports = React.createClass({
                 log.appendChild(r.log);
             }.bind(this)
         });
-
          */
     },
     render: function() {

@@ -3,11 +3,13 @@ var React = require('react');
 
 module.exports = React.createClass({
     statusClass: function() {
+        var classes = '';
         if (this.props.status) {
-            return 'alert alert-success status';
+            classes = 'alert-success';
         } else {
-            return 'alert alert-danger status';
+            classes = 'alert-danger';
         }
+        return 'alert status ' + classes;
     },
     render: function() {
         return (
