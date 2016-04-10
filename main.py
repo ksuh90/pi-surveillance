@@ -71,7 +71,7 @@ def disconnect(message):
     print('Pubnub: disconnected')
   
 def prettify_time(timestamp):
-    format = '%Y-%m-%dT%H-%M-%S'
+    format = '%Y-%m-%dT%H:%M:%S'
     return datetime.fromtimestamp(timestamp).strftime(format)
 
 def upload(t_pretty, filename, manual=False):
@@ -125,8 +125,10 @@ def send_email(t_pretty, filename, docid):
     r = requests.post(url, payload)
     print(r.text)
 
-def say_cheese(t_pretty):
-    filename = t_pretty + '.jpg'
+def say_cheese(timestamp):
+    format = '%Y-%m-%dT%H-%M-%S'
+    filename = datetime.fromtimestamp(timestamp).strftime(format)
+    filename = filename + '.jpg'
     camera_resolution = config.get('Camera', 'resolution')
     command = 'fswebcam -r %s %s' % (camera_resolution, 'img/'+filename)
     os.system(command)
@@ -142,9 +144,9 @@ def alert(PIR_PIN):
 
     print('\r\n!!!!! Intruder Alert !!!!!\r\n')
 
-    t        = time.time()
+    t = time.time()
     t_pretty = prettify_time(t)
-    filename = say_cheese(t_pretty)
+    filename = say_cheese(t)
     docid = upload(t_pretty, filename)
     if (email_notification):
         send_email(t_pretty, filename, docid)
@@ -161,7 +163,7 @@ def control(option):
     t_pretty = prettify_time(t)
     msg = ''
     if option == 'take_pic':
-        if (upload(t_pretty, say_cheese(t_pretty), True)):
+        if (upload(t_pretty, say_cheese(t), True)):
             msg = 'Picture taken!'
     elif option == 'pause':
         system_paused = True
