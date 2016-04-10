@@ -112,12 +112,13 @@ var Control = React.createClass({
                 if (r.type == 'control_resp') {
                     var status = <StatusAlert status={true} msg={r.msg} />;
                     that.setState({statusComponent: status});
-                    $.unblockUI();
                 }
+                $.unblockUI();
             },
             error: function (error) {
                 var status = <StatusAlert status={false} msg={JSON.stringify(error)} />;
                 that.setState({statusComponent: status});
+                $.unblockUI();
                 //console.log(JSON.stringify(error));
             }
         });
