@@ -108,21 +108,6 @@ body {
 /*
  * pi-surveillance swag
  */
-
-/* Status alerts */
-div.status {
-  color: #fff;
-  text-shadow: none;
-}
-div.alert-danger {
-  background-color: #ED5C6D;
-  border-color: #ED5C6D;
-}
-div.alert-success {
-  background-color: #3CDEB0;
-  border-color: #3CDEB0;
-}
-
 /* Control panel */
 .control-slot {
   border: 1px solid #eee;
@@ -130,6 +115,9 @@ div.alert-success {
 }
 .control-slot p {
   font-size: 14px;
+}
+.control-slot button {
+  margin-right: 10px;
 }
 
 /* Log */
