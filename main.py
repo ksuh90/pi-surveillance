@@ -26,11 +26,11 @@ client = Cloudant(db_api_key, db_api_pass,
                   url='https://'+db_username+'.cloudant.com')
 
 # Pubnub setup
-publish_key    = config.get('Pubnub', 'publish_key')
-subscribe_key  = config.get('Pubnub', 'subscribe_key')
-pubnub_channel = config.get('Pubnub', 'channel')
-pubnub         = Pubnub(publish_key=publish_key,
-                        subscribe_key=subscribe_key)
+publish_key = config.get('Pubnub', 'publish_key')
+subscribe_key = config.get('Pubnub', 'subscribe_key')
+pubnub_channel_pi = config.get('Pubnub', 'channel_pi')
+pubnub_channel_client = config.get('Pubnub', 'channel_client')
+pubnub = Pubnub(publish_key=publish_key, subscribe_key=subscribe_key)
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -103,7 +103,7 @@ def upload(t_pretty, filename, manual=False):
         print('Upload success!')
         # send live feed to webpage
         payload = {'type': 'doc', 'doc': new_document}
-        pubnub.publish(pubnub_channel, payload)
+        pubnub.publish(pubnub_channel_pi, payload)
         return docid
 
     print('Failed to upload image.')
@@ -187,7 +187,8 @@ def control(option):
         print(msg)
 
     # publish the response object
-    pubnub.publish(pubnub_channel, {'type': 'control_resp', 'msg': msg})
+    pubnub.publish(pubnub_channel_pi, {'type': 'control_resp', 'msg': msg})
+    print('publish complete')
 
 def has_internet():
     remote_server = 'www.google.com'
@@ -213,8 +214,8 @@ if __name__ == '__main__':
     # connect to cloudant client
     client.connect()
 
-    # subscribe to pubnub channel
-    pubnub.subscribe(channels=pubnub_channel, callback=callback, error=callback,
+    # subscribe to client channel
+    pubnub.subscribe(channels=pubnub_channel_client, callback=callback, error=callback,
                  connect=connect, reconnect=reconnect, disconnect=disconnect)
 
     # ensure red led is off
@@ -232,5 +233,5 @@ if __name__ == '__main__':
 
     finally:
         print('Shutting down...')
-        pubnub.unsubscribe(channel=pubnub_channel)
+        pubnub.unsubscribe(channel=pubnub_channel_client)
         GPIO.cleanup()

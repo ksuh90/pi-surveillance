@@ -99,12 +99,19 @@ var Container = React.createClass({
     }
 });
 
+// get/create/store UUID
+var UUID = PUBNUB.db.get('session') || (function(){ 
+    var uuid = PUBNUB.uuid(); 
+    PUBNUB.db.set('session', uuid); 
+    return uuid; 
+})();
 
 // Initialize APP object
 var APP = window.APP || {};
 APP.pubnub = PUBNUB.init({
     publish_key: APP.pubnub_pub_key,
     subscribe_key: APP.pubnub_sub_key,
+    uuid: UUID,
     ssl : (('https:' == document.location.protocol) ? true : false),
     error: function (error) {
         console.log('Error:', error);
